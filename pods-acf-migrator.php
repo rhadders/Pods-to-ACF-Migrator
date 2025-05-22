@@ -4,6 +4,8 @@ Plugin Name: Pods to ACF Migrator
 Description: Migrate Pods custom post types and fields to ACF Pro
 Version: 1.0
 Author: Ruben Hadders | Jona zinvolle communicatie
+Text Domain: pods-acf-migrator
+Domain Path: /languages
 */
 
 if (!defined('ABSPATH')) exit;
@@ -11,9 +13,9 @@ if (!defined('ABSPATH')) exit;
 define('PODS_ACF_JSON_DIR', plugin_dir_path(__FILE__) . 'acf-json/');
 define('PODS_ACF_LOG_FILE', plugin_dir_path(__FILE__) . 'migration.log');
 
-register_activation_hook(__FILE__, function() {
-    if (!file_exists(PODS_ACF_JSON_DIR)) wp_mkdir_p(PODS_ACF_JSON_DIR);
-    if (!file_exists(PODS_ACF_LOG_FILE)) file_put_contents(PODS_ACF_LOG_FILE, "");
+// [NEW] Load translation domain
+add_action('plugins_loaded', function() {
+    load_plugin_textdomain('pods-acf-migrator', false, dirname(plugin_basename(__FILE__)) . '/languages');
 });
 
 add_filter('acf/settings/load_json', function($paths) {
@@ -23,8 +25,8 @@ add_filter('acf/settings/load_json', function($paths) {
 
 add_action('admin_menu', function() {
     add_menu_page(
-        'Pods to ACF Migrator',
-        'Pods to ACF Migrator',
+        __('Pods to ACF Migrator', 'pods-acf-migrator'),
+        __('Pods to ACF Migrator', 'pods-acf-migrator'),
         'manage_options',
         'pods-acf-migrator',
         'pods_acf_migrator_dashboard',
@@ -33,16 +35,16 @@ add_action('admin_menu', function() {
     );
     add_submenu_page(
         'pods-acf-migrator',
-        'Exported JSON files',
-        'Exported JSON files',
+        __('Exported JSON files', 'pods-acf-migrator'),
+        __('Exported JSON files', 'pods-acf-migrator'),
         'manage_options',
         'pods-acf-migrator-exports',
         'pods_acf_migrator_exports_page'
     );
     add_submenu_page(
         'pods-acf-migrator',
-        'Migration Log',
-        'Migration Log',
+        __('Migration Log', 'pods-acf-migrator'),
+        __('Migration Log', 'pods-acf-migrator'),
         'manage_options',
         'pods-acf-migrator-log',
         'pods_acf_migrator_log_page'
@@ -68,19 +70,19 @@ function pods_acf_is_field_excluded($fname) {
 }
 
 function pods_acf_migrator_dashboard() {
-    if (!current_user_can('manage_options')) wp_die("You do not have sufficient permissions to access this page.");
+    if (!current_user_can('manage_options')) wp_die(__("You do not have sufficient permissions to access this page.", "pods-acf-migrator"));
     echo '<div class="wrap">';
-    echo '<h1>Pods to ACF Migrator</h1>';
+    echo '<h1>' . esc_html__('Pods to ACF Migrator', 'pods-acf-migrator') . '</h1>';
 
     // Navigation: three links with icon
     echo '<div class="pods-acf-nav" style="margin:16px 0 18px 0;">
         <span style="margin-right:18px;">
             <span class="dashicons dashicons-media-default" style="vertical-align:middle;font-size:17px;margin-right:3px;"></span>
-            <a href="'.admin_url('admin.php?page=pods-acf-migrator-exports').'">Exported JSON files</a>
+            <a href="'.admin_url('admin.php?page=pods-acf-migrator-exports').'">' . __('Exported JSON files', 'pods-acf-migrator') . '</a>
         </span>
         <span style="margin-right:18px;">
             <span class="dashicons dashicons-list-view" style="vertical-align:middle;font-size:17px;margin-right:3px;"></span>
-            <a href="'.admin_url('admin.php?page=pods-acf-migrator-log').'">Migration Log</a>
+            <a href="'.admin_url('admin.php?page=pods-acf-migrator-log').'">' . __('Migration Log', 'pods-acf-migrator') . '</a>
         </span>
         <span>
             <span class="dashicons dashicons-book-alt" style="vertical-align:middle;font-size:17px;margin-right:3px;"></span>
@@ -90,7 +92,7 @@ function pods_acf_migrator_dashboard() {
 
     // Pods check
     if (!class_exists('Pods')) {
-        echo '<div class="notice notice-error"><p>Pods plugin is not active. Please install and activate Pods.</p></div>';
+        echo '<div class="notice notice-error"><p>' . __('Pods plugin is not active. Please install and activate Pods.', 'pods-acf-migrator') . '</p></div>';
         echo '</div>'; return;
     }
 
@@ -107,31 +109,21 @@ function pods_acf_migrator_dashboard() {
     }
     $acf_ok = ($acf_version && version_compare($acf_version, '6.0.0', '>='));
     if (!$acf_ok) {
-        echo '<div class="notice notice-error"><p><b>ACF Pro 6.0 or higher is required.</b> Please install and activate ACF Pro 6+ before migrating. <a href="https://www.advancedcustomfields.com/pro/" target="_blank" rel="noopener">More info</a></p></div>';
+        echo '<div class="notice notice-error"><p><b>' . __('ACF Pro 6.0 or higher is required.', 'pods-acf-migrator') . '</b> ' . __('Please install and activate ACF Pro 6+ before migrating.', 'pods-acf-migrator') . ' <a href="https://www.advancedcustomfields.com/pro/" target="_blank" rel="noopener">' . __('More info', 'pods-acf-migrator') . '</a></p></div>';
     }
 
     // Handle export
     if (!empty($_POST['pods_acf_export_nonce']) && wp_verify_nonce($_POST['pods_acf_export_nonce'], 'pods_acf_export_action')) {
         if (!$acf_ok) {
-            pods_acf_migrator_modal('Migration failed: ACF Pro 6.0+ is not available.', false, true);
+            pods_acf_migrator_modal(__("Migration failed: ACF Pro 6.0+ is not available.", "pods-acf-migrator"), false, true);
         } else {
             $export_result = pods_acf_migrator_handle_export();
             echo $export_result['notice'];
             if ($export_result['success']) {
                 $summary = $export_result['summary'];
-                pods_acf_migrator_modal(
-                    'Migration complete!<br><br>
-                    <b>Exported:</b><br>' . nl2br(esc_html($summary)) . '<br><br>
-                    <b>Next steps:</b>
-                    <ol>
-                        <li>Go to <b>ACF → Field Groups</b> and/or <b>ACF → Post Types</b> in your dashboard.</li>
-                        <li>Click on <b>Sync available</b> at the top to import the newly generated field groups and/or post types.</li>
-                        <li>Review, adjust and publish the imported ACF items as needed.</li>
-                    </ol>',
-                    true
-                );
+                pods_acf_migrator_modal(sprintf(__("Migration complete!<br><br><b>Exported:</b><br>%s<br><br><b>Next steps:</b><ol><li>Go to <b>ACF → Field Groups</b> and/or <b>ACF → Post Types</b> in your dashboard.</li><li>Click on <b>Sync available</b> at the top to import the newly generated field groups and/or post types.</li><li>Review, adjust and publish the imported ACF items as needed.</li></ol>", "pods-acf-migrator"), nl2br(esc_html($summary))), true);
             } else {
-                pods_acf_migrator_modal('Migration failed: '.$export_result['error'], false, true);
+                pods_acf_migrator_modal(sprintf(__("Migration failed: %s", "pods-acf-migrator"), $export_result['error']), false, true);
             }
         }
     }
@@ -145,9 +137,8 @@ function pods_acf_migrator_dashboard() {
     echo '</div>';
 }
 
-// --- MODAL FUNCTION ---
 function pods_acf_migrator_modal($content, $success = true, $forceShow = false) {
-    $color = $success ? '#46b450' : '#d63638'; // WP groen of rood
+    $color = $success ? '#46b450' : '#d63638'; // WP green or red
     $icon = $success ? 'yes' : 'no-alt';
     echo '
     <div id="pods-acf-modal" style="display:block;position:fixed;z-index:99999;left:0;top:0;width:100vw;height:100vh;background:rgba(0,0,0,.25);font-family:inherit;">
@@ -161,10 +152,10 @@ function pods_acf_migrator_modal($content, $success = true, $forceShow = false) 
             position:relative;
         ">
             <div style="display:flex;align-items:center;margin-bottom:30px;">
-                <span class="dashicons dashicons-'.$icon.'" style="font-size:40px;color:'.$color.';line-height:1;flex-shrink:0;display:flex;align-items:center;padding-right:14px;"></span>
-                <span style="font-size:1.7em; font-weight:700; color:#1d2327; line-height:1.13;">'.($success?'Success':'Error').'</span>
+                <span class="dashicons dashicons-' . $icon . '" style="font-size:40px;color:' . $color . ';line-height:1;flex-shrink:0;display:flex;align-items:center;padding-right:14px;"></span>
+                <span style="font-size:1.7em; font-weight:700; color:#1d2327; line-height:1.13;">' . ($success ? 'Success' : 'Error') . '</span>
             </div>
-            <div style="color:#2c3338;font-size:1.09em;line-height:1.6;">'.$content.'</div>
+            <div style="color:#2c3338;font-size:1.09em;line-height:1.6;">' . $content . '</div>
             <a href="#" onclick="document.getElementById(\'pods-acf-modal\').remove();document.body.style.overflow=\'auto\';return false;"
                 class="button button-primary"
                 style="
@@ -218,7 +209,7 @@ function pods_acf_migrator_export_form($acf_ok) {
         }
     }
     if ($found === 0) {
-        echo '<div class="notice notice-warning"><p>No custom post types found in Pods to migrate.</p></div>'; return;
+        echo '<div class="notice notice-warning"><p>' . __('No custom post types found in Pods to migrate.', 'pods-acf-migrator') . '</p></div>'; return;
     }
     ?>
     <form method="post" id="pods-acf-export-form" style="margin-top:20px;">
@@ -236,18 +227,18 @@ function pods_acf_migrator_export_form($acf_ok) {
                 <span style="color:#999;font-size:0.96em;">(<?php echo esc_html($pt_slug); ?>)</span>
                 <span style="float:right;color:#888;">&#x25BC;</span>
             </div>
-            <div class="pods-acc-panel" id="panel_<?php echo esc_attr($pt_slug); ?>">
+            <div class="pods-acc-panel" id="panel_<?php echo esc_attr($pt_slug);  ?>">
                 <p style="margin-bottom:6px;color:#444;">
-                    Select which fields and/or structure to migrate for <b><?php echo esc_html($ptdata['label']); ?></b>:
+                    <?php printf(__('Select which fields and/or structure to migrate for <b>%s</b>:', 'pods-acf-migrator'), esc_html($ptdata['label'])); ?>
                 </p>
                 <label style="margin-bottom:7px; display:block;">
                     <input type="checkbox" name="pods_structure[<?php echo esc_attr($pt_slug); ?>]" value="1" class="struct_<?php echo esc_attr($pt_slug); ?>">
-                    <b>Export post type structure</b>
+                    <b><?php _e('Export post type structure', 'pods-acf-migrator'); ?></b>
                 </label>
                 <?php if (!empty($ptdata['fields'])): ?>
                     <div class="pods-select-all" style="margin-bottom:5px;">
                         <input type="checkbox" id="selectall_<?php echo esc_attr($pt_slug); ?>" onclick="podsSelectAllFields('<?php echo esc_attr($pt_slug); ?>', this)" disabled>
-                        <label for="selectall_<?php echo esc_attr($pt_slug); ?>"><b>Select all fields</b></label>
+                        <label for="selectall_<?php echo esc_attr($pt_slug); ?>"><b><?php _e('Select all fields', 'pods-acf-migrator'); ?></b></label>
                     </div>
                     <div>
                     <?php foreach($ptdata['fields'] as $fname => $fdata): ?>
@@ -258,23 +249,23 @@ function pods_acf_migrator_export_form($acf_ok) {
                     <?php endforeach; ?>
                     </div>
                 <?php else: ?>
-                    <em>No custom fields defined for this post type.</em>
+                    <em><?php _e('No custom fields defined for this post type.', 'pods-acf-migrator'); ?></em>
                 <?php endif; ?>
             </div>
         </div>
     <?php endforeach; ?>
     </div>
     <input type="hidden" id="pods-export-summary" name="pods_export_summary" value="">
-    <button type="submit" class="button button-primary pods-export-btn" id="pods-export-submit" style="margin-top:18px;<?php if(!$acf_ok) echo 'opacity:0.5;cursor:not-allowed;'; ?>" <?php if(!$acf_ok) echo 'disabled'; ?>>Export selected</button>
+    <button type="submit" class="button button-primary pods-export-btn" id="pods-export-submit" style="margin-top:18px;<?php if(!$acf_ok) echo 'opacity:0.5;cursor:not-allowed;'; ?>" <?php if(!$acf_ok) echo 'disabled'; ?>><?php _e('Export selected', 'pods-acf-migrator'); ?></button>
     <!-- Progress bar -->
     <div id="pods-progressbar-container" style="margin-top:12px;display:none;max-width:280px;">
         <div id="pods-progressbar-bg" style="background:#e5e5e5;height:18px;border-radius:4px;">
             <div id="pods-progressbar-bar" style="background:#2271b1;height:18px;width:0%;border-radius:4px;transition:width 0.3s;"></div>
         </div>
-        <div id="pods-progressbar-label" style="font-size:13px;color:#666;padding-left:3px;margin-top:2px;">Exporting...</div>
+        <div id="pods-progressbar-label" style="font-size:13px;color:#666;padding-left:3px;margin-top:2px;"><?php echo esc_js(__('Exporting...', 'pods-acf-migrator')); ?></div>
     </div>
     <?php if (!$acf_ok): ?>
-        <div style="margin-top:8px;color:#a00;font-weight:500;">ACF Pro 6.0+ is required to export. Please install and activate ACF Pro.</div>
+        <div style="margin-top:8px;color:#a00;font-weight:500;"><?php _e('ACF Pro 6.0+ is required to export. Please install and activate ACF Pro.', 'pods-acf-migrator'); ?></div>
     <?php endif; ?>
     </form>
     <style>
@@ -337,83 +328,41 @@ function pods_acf_migrator_export_form($acf_ok) {
         });
         // Reset selection
         document.getElementById('pods-reset-btn').addEventListener('click', function() {
-            document.querySelectorAll('#pods-acf-export-form input[type=checkbox]').forEach(function(cb){cb.checked=false;cb.disabled=(cb.className.indexOf('field_')>-1||cb.id.indexOf('selectall_')===0)?true:cb.disabled;});
+            document.querySelectorAll('#pods-acf-export-form input[type=checkbox]').forEach(function(cb){cb.checked=false;cb.disabled=(cb.className.indexOf('field_') !== -1);});
         });
-        // Select all sync
-        document.querySelectorAll('.pods-accordion').forEach(function(acc) {
-            var slug = acc.querySelector('.pods-acc-title input[type=checkbox]').value;
-            var checkboxes = acc.querySelectorAll('.field_' + slug);
-            var selectall = acc.querySelector('#selectall_' + slug);
-            var cpt_cb = document.getElementById('cpt_'+slug);
-            if (!selectall || !checkboxes.length) return;
-            checkboxes.forEach(function(cb) {
-                cb.addEventListener('change', function() {
-                    if (!selectall.disabled) {
-                        var allChecked = true;
-                        checkboxes.forEach(function(fieldcb) {
-                            if (!fieldcb.checked) allChecked = false;
-                        });
-                        selectall.checked = allChecked;
-                    }
-                });
+        // Sync "select all" when individual fields change
+        document.querySelectorAll('input[type=checkbox]').forEach(function(cb) {
+            cb.addEventListener('change', function(){
+                if (this.id.startsWith('selectall_')) {
+                    return;
+                }
+                var slugMatch = this.className.match(/field_(\w+)/);
+                if (slugMatch) {
+                    var slug = slugMatch[1];
+                    var allFields = document.querySelectorAll('input.field_'+slug);
+                    var allChecked = true;
+                    allFields.forEach(function(f){ if (!f.checked) allChecked=false; });
+                    var selectAllCb = document.getElementById('selectall_'+slug);
+                    if (selectAllCb) selectAllCb.checked = allChecked;
+                }
             });
-            // Also, when individual checkboxes are enabled/disabled
-            cpt_cb.addEventListener('change', function(){
-                selectall.checked = false;
-            });
-        });
-
-        // Progress bar logic
-        document.getElementById('pods-acf-export-form').addEventListener('submit', function(e){
-            var sel = [];
-            var total = 0;
-            document.querySelectorAll('.pods-acc-title input[type=checkbox]').forEach(function(cpt_cb){
-                if (!cpt_cb.checked) return;
-                var slug = cpt_cb.value;
-                var label = cpt_cb.parentNode.querySelector('.pods-acc-label').textContent;
-                var fields = [];
-                document.querySelectorAll('.field_'+slug+':checked').forEach(function(fcb){
-                    var fname = fcb.parentNode.textContent.trim();
-                    fields.push(fname);
-                });
-                var structure = document.querySelector('.struct_'+slug) && document.querySelector('.struct_'+slug).checked;
-                var text = '- '+label+' ('+slug+'): ';
-                if (fields.length>0) text += fields.length+' field(s)';
-                if (structure) text += (fields.length>0? ' + ':'')+'structure';
-                sel.push(text);
-                total++;
-            });
-            if (sel.length === 0) {
-                alert('No post types or fields selected for export.');
-                e.preventDefault(); return false;
-            }
-            var summary = sel.join('\n');
-            // Voortgangsbalk
-            var bar = document.getElementById('pods-progressbar-bar');
-            var container = document.getElementById('pods-progressbar-container');
-            var label = document.getElementById('pods-progressbar-label');
-            bar.style.width = "0%";
-            container.style.display = 'block';
-            label.textContent = 'Exporting...';
-            // Simuleer voortgang (instant completion na 0.9s, want alles server-side)
-            setTimeout(function(){
-                bar.style.width = "100%";
-                label.textContent = 'Done!';
-            }, 900);
         });
     });
     </script>
     <?php
 }
 
-// --- EXPORT HANDLER ---
 function pods_acf_migrator_handle_export() {
     $notice = '';
     $user = wp_get_current_user();
     $username = $user ? $user->user_login : 'unknown';
+    // [NEW] Log error if no selection
     if (empty($_POST['pods_export'])) {
-        $notice = '<div class="notice notice-error"><p>No post types selected for export.</p></div>';
-        return ['notice' => $notice, 'success'=>false, 'error'=>'No post types selected.'];
+        $notice = '<div class="notice notice-error"><p>' . __('No post types selected for export.', 'pods-acf-migrator') . '</p></div>';
+        // [NEW] Log the error
+        $log_line = date("Y-m-d H:i") . " | $username | fieldgroup | - | No post types selected | Failed\n";
+        file_put_contents(PODS_ACF_LOG_FILE, $log_line, FILE_APPEND);
+        return ['notice' => $notice, 'success' => false, 'error' => __('No post types selected.', 'pods-acf-migrator')];
     }
     $sel = $_POST['pods_export'];
     $sel_fields = $_POST['pods_fields'] ?? [];
@@ -425,92 +374,106 @@ function pods_acf_migrator_handle_export() {
         $log_line = date("Y-m-d H:i") . " | $username | ";
         $details = [];
         $field_count = 0;
-        // Export CPT structure?
-        if (isset($sel_struct[$pt_slug])) {
+        // [NEW] Save state for rollback of counters
+        $prev_exported_cpt = $exported_cpt;
+        $prev_exported_fg = $exported_fg;
+        try {
+            // Export CPT structure?
+            if (isset($sel_struct[$pt_slug])) {
+                $pod_obj = pods($pt_slug);
+                $pod_arr = (array) $pod_obj;
+                $settings = [];
+                if (isset($pod_obj->pod_data)) $settings = $pod_obj->pod_data;
+                elseif (isset($pod_arr['object'])) {
+                    $poddata = (array)$pod_arr['object'];
+                    if (isset($poddata['options'])) $settings = $poddata['options'];
+                } else {
+                    $api = pods_api();
+                    $pods = $api->load_pods([]);
+                    if (isset($pods[$pt_slug])) {
+                        $objarr = (array) $pods[$pt_slug];
+                        if (isset($objarr["\0*\0args"])) $settings = $objarr["\0*\0args"];
+                    }
+                }
+                $acf_post_type = [
+                    'key' => 'post_type_' . $pt_slug,
+                    'name' => $pt_slug,
+                    'label' => $settings['label'] ?? ucfirst($pt_slug),
+                    'title' => $settings['label'] ?? ucfirst($pt_slug),
+                    'description' => $settings['description'] ?? '',
+                    'public' => !empty($settings['public']),
+                    'show_in_menu' => !empty($settings['show_ui']),
+                    'show_in_rest' => !empty($settings['rest_enable']),
+                    'has_archive' => !empty($settings['has_archive']),
+                    'hierarchical' => !empty($settings['hierarchical']),
+                    'supports' => []
+                ];
+                $supports = [];
+                foreach(['title'=>'supports_title','editor'=>'supports_editor','thumbnail'=>'supports_thumbnail','excerpt'=>'supports_excerpt','revisions'=>'supports_revisions','author'=>'supports_author'] as $wp => $podsopt) {
+                    if (!empty($settings[$podsopt])) $supports[] = $wp;
+                }
+                $acf_post_type['supports'] = $supports;
+                $filename = 'acf-cpt-' . $pt_slug . '.json';
+                $json = json_encode($acf_post_type, JSON_PRETTY_PRINT);
+                if (!file_exists(PODS_ACF_JSON_DIR)) wp_mkdir_p(PODS_ACF_JSON_DIR);
+                file_put_contents(PODS_ACF_JSON_DIR . $filename, $json);
+                $exported_cpt++;
+                $details[] = 'structure';
+                $exported = true;
+            }
             $pod_obj = pods($pt_slug);
-            $pod_arr = (array) $pod_obj;
-            $settings = [];
-            if (isset($pod_arr['pod_data'])) $settings = $pod_arr['pod_data'];
-            elseif (isset($pod_arr['object'])) {
-                $poddata = (array)$pod_arr['object'];
-                if (isset($poddata['options'])) $settings = $poddata['options'];
-            } else {
-                $api = pods_api();
-                $pods = $api->load_pods([]);
-                if (isset($pods[$pt_slug])) {
-                    $objarr = (array) $pods[$pt_slug];
-                    if (isset($objarr["\0*\0args"])) $settings = $objarr["\0*\0args"];
+            if (!$pod_obj || !method_exists($pod_obj, 'fields')) throw new Exception("Pod $pt_slug not found or invalid.");
+            $all_fields = $pod_obj->fields();
+            $field_defs = [];
+            if (!empty($sel_fields[$pt_slug])) {
+                foreach ($sel_fields[$pt_slug] as $fname) {
+                    if (!isset($all_fields[$fname])) continue;
+                    if (pods_acf_is_field_excluded($fname)) continue;
+                    $fdata = $all_fields[$fname];
+                    $field_defs[] = pods_acf_migrator_map_field($fname, $fdata);
+                    $field_count++;
                 }
             }
-            $acf_post_type = [
-                'key' => 'post_type_' . $pt_slug,
-                'name' => $pt_slug,
-                'label' => $settings['label'] ?? ucfirst($pt_slug),
-                'description' => $settings['description'] ?? '',
-                'public' => !empty($settings['public']),
-                'show_in_menu' => !empty($settings['show_ui']),
-                'show_in_rest' => !empty($settings['rest_enable']),
-                'has_archive' => !empty($settings['has_archive']),
-                'hierarchical' => !empty($settings['hierarchical']),
-                'supports' => []
-            ];
-            $supports = [];
-            foreach(['title'=>'supports_title','editor'=>'supports_editor','thumbnail'=>'supports_thumbnail','excerpt'=>'supports_excerpt','revisions'=>'supports_revisions','author'=>'supports_author'] as $wp => $podsopt) {
-                if (!empty($settings[$podsopt])) $supports[] = $wp;
+            if (count($field_defs) > 0) {
+                $acf_fg = [
+                    'key' => 'group_' . $pt_slug,
+                    'title' => ucfirst($pt_slug) . ' Fields',
+                    'fields' => $field_defs,
+                    'location' => [[['param'=>'post_type','operator'=>'==','value'=>$pt_slug]]],
+                    'menu_order'=>0,
+                    'position'=>'normal',
+                    'style'=>'default',
+                    'label_placement'=>'top',
+                    'instruction_placement'=>'label',
+                    'hide_on_screen'=>'',
+                    'active'=>true,
+                    'description'=>'Migrated from Pods'
+                ];
+                $filename = 'acfgroup-' . $pt_slug . '.json';
+                $json = json_encode($acf_fg, JSON_PRETTY_PRINT);
+                if (!file_exists(PODS_ACF_JSON_DIR)) wp_mkdir_p(PODS_ACF_JSON_DIR);
+                file_put_contents(PODS_ACF_JSON_DIR . $filename, $json);
+                $exported_fg++;
+                $details[] = 'fields: '.$field_count;
+                $exported = true;
             }
-            $acf_post_type['supports'] = $supports;
-            $filename = 'acf-cpt-' . $pt_slug . '.json';
-            $json = json_encode($acf_post_type, JSON_PRETTY_PRINT);
-            if (!file_exists(PODS_ACF_JSON_DIR)) wp_mkdir_p(PODS_ACF_JSON_DIR);
-            file_put_contents(PODS_ACF_JSON_DIR . $filename, $json);
-            $exported_cpt++;
-            $details[] = 'structure';
-            $exported = true;
-        }
-        $pod_obj = pods($pt_slug);
-        if (!$pod_obj || !method_exists($pod_obj, 'fields')) continue;
-        $all_fields = $pod_obj->fields();
-        $field_defs = [];
-        if (!empty($sel_fields[$pt_slug])) {
-            foreach ($sel_fields[$pt_slug] as $fname) {
-                if (!isset($all_fields[$fname])) continue;
-                if (pods_acf_is_field_excluded($fname)) continue; // skip Pods-only fields
-                $fdata = $all_fields[$fname];
-                $field_defs[] = pods_acf_migrator_map_field($fname, $fdata);
-                $field_count++;
+            if (!$exported) {
+                $log_line .= "fieldgroup | $pt_slug | no export | Failed";
+                $any_error = true;
+            } else {
+                $log_line .= "fieldgroup | $pt_slug | " . strtolower(implode(', ', $details)) . " | Success";
+                $summary[] = ucfirst($pt_slug) . ': ' . implode(', ', $details);
             }
-        }
-        if (count($field_defs) > 0) {
-            $acf_fg = [
-                'key' => 'group_' . $pt_slug,
-                'title' => ucfirst($pt_slug) . ' Fields',
-                'fields' => $field_defs,
-                'location' => [[['param'=>'post_type','operator'=>'==','value'=>$pt_slug]]],
-                'menu_order'=>0,
-                'position'=>'normal',
-                'style'=>'default',
-                'label_placement'=>'top',
-                'instruction_placement'=>'label',
-                'hide_on_screen'=>'',
-                'active'=>true,
-                'description'=>'Migrated from Pods'
-            ];
-            $filename = 'acfgroup-' . $pt_slug . '.json';
-            $json = json_encode($acf_fg, JSON_PRETTY_PRINT);
-            if (!file_exists(PODS_ACF_JSON_DIR)) wp_mkdir_p(PODS_ACF_JSON_DIR);
-            file_put_contents(PODS_ACF_JSON_DIR . $filename, $json);
-            $exported_fg++;
-            $details[] = 'fields: '.$field_count;
-            $exported = true;
-        }
-        if (!$exported) {
-            $log_line .= "fieldgroup | $pt_slug | no export | Failed";
+            $log[] = $log_line . "\n";
+        } catch (Exception $e) {
+            // [NEW] Handle exception: revert partial counters, log error
+            $exported_cpt = $prev_exported_cpt;
+            $exported_fg = $prev_exported_fg;
             $any_error = true;
-        } else {
-            $log_line .= "fieldgroup | $pt_slug | " . strtolower(implode(', ', $details)) . " | Success";
-            $summary[] = ucfirst($pt_slug) . ': ' . implode(', ', $details);
+            $log_line .= "fieldgroup | $pt_slug | ERROR: " . $e->getMessage() . " | Failed";
+            $log[] = $log_line . "\n";
+            continue;
         }
-        $log[] = $log_line . "\n";
     }
     file_put_contents(PODS_ACF_LOG_FILE, implode("", $log), FILE_APPEND);
     $msg = [];
@@ -544,25 +507,54 @@ function pods_acf_migrator_map_field($fname, $fdata) {
         case 'image': $acf_type = 'image'; break;
         case 'oembed': $acf_type = 'oembed'; break;
         case 'color': $acf_type = 'color_picker'; break;
+        case 'user': $acf_type = 'user'; break;
         default: $acf_type = 'text'; break;
     }
-    return [
+    $result = [
         'key' => 'field_' . md5($fname . time() . rand()),
         'label' => $fdata['label'] ?? $fname,
         'name' => $fname,
         'type' => $acf_type,
         'instructions' => '',
-        'required' => 0,
+        'required' => !empty($fdata['required']) ? 1 : 0,
         'conditional_logic' => 0,
         'wrapper' => ['width'=>'','class'=>'','id'=>'']
     ];
+    // [NEW] Adjust field mapping for relational field types
+    if (($pods_type === 'relationship' || $pods_type === 'posttype')) {
+        $limit_val = $fdata['limit'] ?? ($fdata['options']['limit'] ?? null);
+        if ($limit_val === null || $limit_val === '' || intval($limit_val) === 1) {
+            $result['type'] = 'post_object';
+        } else {
+            $result['type'] = 'relationship';
+        }
+    } elseif ($pods_type === 'taxonomy') {
+        $taxonomy_target = $fdata['options']['taxonomy'] ?? ($fdata['options']['pod'] ?? '');
+        if (!$taxonomy_target) $taxonomy_target = 'category';
+        $limit_val = $fdata['limit'] ?? ($fdata['options']['limit'] ?? null);
+        $field_type = 'checkbox';
+        if ($limit_val === null || $limit_val === '' || intval($limit_val) === 1) {
+            $field_type = 'select';
+        }
+        $result['type'] = 'taxonomy';
+        $result['taxonomy'] = $taxonomy_target;
+        $result['field_type'] = $field_type;
+        $result['allow_null'] = 0;
+        $result['add_term'] = 0;
+        $result['save_terms'] = 0;
+        $result['load_terms'] = 0;
+        $result['return_format'] = 'id';
+    } elseif ($pods_type === 'user') {
+        $result['type'] = 'user';
+    }
+    return $result;
 }
 
 // --- EXPORTS PAGE ---
 function pods_acf_migrator_exports_page() {
-    if (!current_user_can('manage_options')) wp_die("You do not have sufficient permissions to access this page.");
-    echo '<div class="wrap"><h1>Exported JSON files</h1>';
-    echo '<a href="'.admin_url('admin.php?page=pods-acf-migrator').'" class="button" style="margin-bottom:15px;">&#8592; Back to Dashboard</a>';
+    if (!current_user_can('manage_options')) wp_die(__("You do not have sufficient permissions to access this page.", "pods-acf-migrator"));
+    echo '<div class="wrap"><h1>' . __('Exported JSON files', 'pods-acf-migrator') . '</h1>';
+    echo '<a href="'.admin_url('admin.php?page=pods-acf-migrator').'" class="button" style="margin-bottom:15px;">&#8592; ' . __('Back to Dashboard', 'pods-acf-migrator') . '</a>';
     pods_acf_migrator_exports_table();
     echo '</div>';
 }
@@ -571,49 +563,55 @@ function pods_acf_migrator_exports_table() {
     if (!file_exists($dir)) return;
     $files = glob($dir . '*.json');
     if (empty($files)) {
-        echo '<p><em>No exported field groups or CPT structures found.</em></p>';
-        return;
+        echo '<p><em>' . __('No exported field groups or CPT structures found.', 'pods-acf-migrator') . '</em></p>'; return;
     }
 
     // Delete all button + AJAX feedback
     echo '<div style="margin-bottom:18px;">
-        <button id="pods-acf-delete-all-btn" class="button" style="margin-right:16px;">Delete all JSON files</button>
+        <button id="pods-acf-delete-all-btn" class="button" style="margin-right:16px;">' . __('Delete all JSON files', 'pods-acf-migrator') . '</button>
         <span id="pods-acf-delete-all-msg" style="font-weight:500;"></span>
     </div>';
 
     echo '<table class="widefat fixed striped"><thead>
         <tr>
-            <th style="width:35%;">Filename</th>
-            <th>Type</th>
-            <th>Post Type</th>
-            <th>Date</th>
-            <th>Size</th>
-            <th>Action</th>
+            <th style="width:35%;">' . __('Filename', 'pods-acf-migrator') . '</th>
+            <th>' . __('Type', 'pods-acf-migrator') . '</th>
+            <th>' . __('Post Type', 'pods-acf-migrator') . '</th>
+            <th>' . __('Date', 'pods-acf-migrator') . '</th>
+            <th>' . __('Size', 'pods-acf-migrator') . '</th>
+            <th>' . __('Action', 'pods-acf-migrator') . '</th>
         </tr>
     </thead><tbody>';
     foreach($files as $file) {
         $fname = basename($file);
-        $type = strpos($fname, 'acfgroup-') === 0 ? 'Field group' : (strpos($fname, 'acf-cpt-') === 0 ? 'Post Type' : 'Other');
+        $type = strpos($fname, 'acfgroup-') === 0 ? __('Field group', 'pods-acf-migrator') : (strpos($fname, 'acf-cpt-') === 0 ? __('Post Type', 'pods-acf-migrator') : __('Other', 'pods-acf-migrator'));
         $pt = preg_replace('/^acfgroup-|^acf-cpt-|\..+$/', '', $fname);
         $date = date("Y-m-d H:i", filemtime($file));
         $size = round(filesize($file)/1024,1).' KB';
-        $download_url = admin_url('admin-ajax.php?action=pods_acf_download&file=' . urlencode($fname));
+        $download_url = admin_url('admin-ajax.php?action=pods_acf_download&file=' . urlencode($fname) . '&_wpnonce=' . wp_create_nonce('pods_acf_download'));
         $delete_url = admin_url('admin-ajax.php?action=pods_acf_delete&file=' . urlencode($fname) . '&_wpnonce=' . wp_create_nonce('pods_acf_delete'));
-        echo "<tr>
-            <td><span class='dashicons dashicons-media-default' style='color:#2271b1;'></span> $fname</td>
-            <td>$type</td>
-            <td>$pt</td>
-            <td>$date</td>
-            <td>$size</td>
-            <td>
-                <a href='$download_url' class='button' title='Download'><span class='dashicons dashicons-download' style='vertical-align:-2px;'></span></a>
-                <a href='$delete_url' class='button' title='Delete' onclick='return confirm(\"Delete this file?\")'><span class='dashicons dashicons-trash' style='vertical-align:-2px;color:#b32d2e;'></span></a>
-            </td>
-        </tr>";
+echo "<tr>
+    <td><span class='dashicons dashicons-media-default' style='color:#2271b1;'></span> $fname</td>
+    <td>$type</td>
+    <td>$pt</td>
+    <td>$date</td>
+    <td>$size</td>
+    <td>";
+
+    echo '<a href="' . esc_url($download_url) . '" class="button" title="' . esc_attr__('Download', 'pods-acf-migrator') . '" style="margin-right:6px;">
+    <span class="dashicons dashicons-download" style="vertical-align:-2px;"></span>
+</a>';
+
+    echo '<a href="' . esc_url($delete_url) . '" class="button" title="' . esc_attr__('Delete', 'pods-acf-migrator') . '"
+        onclick="return confirm(\'' . esc_js(__('Are you sure you want to delete this file?', 'pods-acf-migrator')) . '\')">
+        <span class="dashicons dashicons-trash" style="vertical-align:-2px;color:#b32d2e;"></span>
+    </a>';
+
+echo "</td></tr>";
     }
     echo '</tbody></table>';
 
-    // AJAX voor delete all
+    // AJAX for delete all
     ?>
     <script>
     document.addEventListener('DOMContentLoaded', function() {
@@ -621,11 +619,15 @@ function pods_acf_migrator_exports_table() {
         if (!delBtn) return;
         delBtn.addEventListener('click', function(e){
             e.preventDefault();
-            if (!confirm('Are you sure you want to delete ALL exported JSON files?')) return;
+            if (!confirm("<?php echo esc_js(__('Are you sure you want to delete ALL exported JSON files?', 'pods-acf-migrator')); ?>")) return;
             delBtn.disabled = true;
             var msg = document.getElementById('pods-acf-delete-all-msg');
-            msg.textContent = 'Deleting...';
-            fetch(ajaxurl + '?action=pods_acf_delete_all_json', {method: 'POST', credentials: 'same-origin'})
+            msg.textContent = '<?php echo esc_js(__("Deleting...", "pods-acf-migrator")); ?>';
+            fetch(ajaxurl, {
+                method: 'POST',
+                credentials: 'same-origin',
+                body: new URLSearchParams({ action: 'pods_acf_delete_all_json', security: '<?php echo wp_create_nonce("pods_acf_delete_all_action"); ?>' })
+            })
                 .then(resp => resp.json())
                 .then(data => {
                     if (data.success) {
@@ -635,14 +637,14 @@ function pods_acf_migrator_exports_table() {
                             var rows = tbl.querySelectorAll('tbody tr');
                             rows.forEach(function(row){ row.parentNode.removeChild(row); });
                         }
-                        msg.textContent = 'All files deleted!';
+                        msg.textContent = '<?php echo esc_js(__("All files deleted!", "pods-acf-migrator")); ?>';
                     } else {
-                        msg.textContent = data.data && data.data.message ? data.data.message : 'Error deleting files.';
+                        msg.textContent = data.data && data.data.message ? data.data.message : '<?php echo esc_js(__("Error deleting files.", "pods-acf-migrator")); ?>';
                     }
                     delBtn.disabled = false;
                 })
                 .catch(err => {
-                    msg.textContent = 'Error deleting files.';
+                    msg.textContent = '<?php echo esc_js(__("Error deleting files.", "pods-acf-migrator")); ?>';
                     delBtn.disabled = false;
                 });
         });
@@ -656,26 +658,26 @@ function pods_acf_migrator_exports_table() {
 
 // --- LOG PAGE ---
 function pods_acf_migrator_log_page() {
-    if (!current_user_can('manage_options')) wp_die("You do not have sufficient permissions to access this page.");
-    echo '<div class="wrap"><h1>Migration Log</h1>';
-    echo '<a href="'.admin_url('admin.php?page=pods-acf-migrator').'" class="button" style="margin-bottom:15px;">&#8592; Back to Dashboard</a>';
+    if (!current_user_can('manage_options')) wp_die(__("You do not have sufficient permissions to access this page.", "pods-acf-migrator"));
+    echo '<div class="wrap"><h1>' . __('Migration Log', 'pods-acf-migrator') . '</h1>';
+    echo '<a href="'.admin_url('admin.php?page=pods-acf-migrator').'" class="button" style="margin-bottom:15px;">&#8592; ' . __('Back to Dashboard', 'pods-acf-migrator') . '</a>';
     pods_acf_migrator_log_table();
     echo '</div>';
 }
 function pods_acf_migrator_log_table() {
     $file = PODS_ACF_LOG_FILE;
     if (!file_exists($file) || filesize($file) === 0) {
-        echo '<p><em>No migrations logged yet.</em></p>'; return;
+        echo '<p><em>' . __('No migrations logged yet.', 'pods-acf-migrator') . '</em></p>'; return;
     }
     $lines = explode("\n", trim(file_get_contents($file)));
     echo '<table class="widefat fixed striped" style="max-width:1050px;">';
     echo '<thead><tr>
-        <th>Date</th>
-        <th>User</th>
-        <th>Type</th>
-        <th>Post Type</th>
-        <th>Details</th>
-        <th>Status</th>
+        <th>' . __('Date', 'pods-acf-migrator') . '</th>
+        <th>' . __('User', 'pods-acf-migrator') . '</th>
+        <th>' . __('Type', 'pods-acf-migrator') . '</th>
+        <th>' . __('Post Type', 'pods-acf-migrator') . '</th>
+        <th>' . __('Details', 'pods-acf-migrator') . '</th>
+        <th>' . __('Status', 'pods-acf-migrator') . '</th>
     </tr></thead><tbody>';
     foreach ($lines as $line) {
         if (!$line) continue;
@@ -695,33 +697,32 @@ function pods_acf_migrator_log_table() {
             $status_label = esc_html($status_raw);
         }
         echo "<tr>";
-        echo '<td>'.esc_html($cols[0]??'').'</td>';
-        echo '<td>'.esc_html($cols[1]??'').'</td>';
-        echo '<td>'.esc_html($cols[2]??'').'</td>';
-        echo '<td>'.esc_html($cols[3]??'').'</td>';
-        echo '<td style="text-transform:lowercase;">'.esc_html($cols[4]??'').'</td>';
-        echo '<td class="'.$status_class.'">'.ucfirst($status_label).'</td>';
+        echo '<td>' . esc_html($cols[0] ?? '') . '</td>';
+        echo '<td>' . esc_html($cols[1] ?? '') . '</td>';
+        echo '<td>' . esc_html($cols[2] ?? '') . '</td>';
+        echo '<td>' . esc_html($cols[3] ?? '') . '</td>';
+        echo '<td style="text-transform:lowercase;">' . esc_html($cols[4] ?? '') . '</td>';
+        echo '<td class="' . $status_class . '">' . ucfirst($status_label) . '</td>';
         echo '</tr>';
     }
     echo '</tbody></table>';
     echo '<div style="margin-top:18px;">';
-    echo '<button id="pods-acf-clear-log-btn" class="button" style="margin-right:16px;">Clear log</button>';
+    echo '<button id="pods-acf-clear-log-btn" class="button" style="margin-right:16px;">' . __('Clear log', 'pods-acf-migrator') . '</button>';
     $download_url = admin_url('admin-ajax.php?action=pods_acf_download_log&_wpnonce=' . wp_create_nonce('pods_acf_download_log'));
-    echo '<a href="'.$download_url.'" class="button">Download log (.txt)</a>';
+    echo '<a href="'.$download_url.'" class="button">' . __('Download log (.txt)', 'pods-acf-migrator') . '</a>';
     echo '<span id="pods-acf-log-msg" style="margin-left:16px;font-weight:500;"></span>';
     echo '</div>';
 ?>
-
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     var clearBtn = document.getElementById('pods-acf-clear-log-btn');
     if (!clearBtn) return;
     clearBtn.addEventListener('click', function(e){
         e.preventDefault();
-        if (!confirm('Are you sure you want to clear the migration log?')) return;
+        if (!confirm("<?php echo esc_js(__('Are you sure you want to clear the migration log?', 'pods-acf-migrator')); ?>")) return;
         clearBtn.disabled = true;
         var msg = document.getElementById('pods-acf-log-msg');
-        msg.textContent = 'Clearing...';
+        msg.textContent = '<?php echo esc_js(__("Clearing...", "pods-acf-migrator")); ?>';
         fetch(ajaxurl + '?action=pods_acf_clear_log', {method: 'POST', credentials: 'same-origin'})
             .then(resp => resp.json())
             .then(data => {
@@ -754,6 +755,7 @@ document.addEventListener('DOMContentLoaded', function() {
 // --- AJAX download/delete actions ---
 add_action('wp_ajax_pods_acf_download', function() {
     if (!current_user_can('manage_options')) exit('No permission');
+    check_admin_referer('pods_acf_download');
     $fname = isset($_GET['file']) ? basename($_GET['file']) : '';
     $fpath = PODS_ACF_JSON_DIR . $fname;
     if (!$fname || !file_exists($fpath)) wp_die('File not found');
@@ -791,6 +793,8 @@ add_action('wp_ajax_pods_acf_delete_all_json', function() {
     if (!current_user_can('manage_options')) {
         wp_send_json_error(['message' => 'No permission']);
     }
+    // [NEW] Nonce validation
+    check_ajax_referer('pods_acf_delete_all_action', 'security');
     $dir = PODS_ACF_JSON_DIR;
     $files = glob($dir . '*.json');
     $removed = 0;

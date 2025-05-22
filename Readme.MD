@@ -37,7 +37,7 @@ Easily migrate your [Pods](https://pods.io/) Custom Post Types (CPT) and fields 
 
 ## Screenshots
 
-![Screenshot of Pods to ACF Migrator plugin](screenshot/screenshot.png)
+![Screenshot of Pods to ACF Migrator plugin](screenshots/screenshot.png)
 
 ## Advanced
 

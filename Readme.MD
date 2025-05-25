@@ -69,6 +69,24 @@ This is an open-source plugin, provided as-is. For issues, requests or improveme
 Not affiliated with Pods, ACF, or Delicious Brains.  
 Always back up your site and test migrations before using on production.
 
+## Changelog
+
+**Version 1.2 | 25-05-2025**
+
+**Improved UI**
+- Refreshed dashboard layout and navigation for enhanced clarity
+- Enhanced accordion controls and selection buttons for a smoother workflow
+
+**Enhanced ACF Export**
+- Reworked JSON structure to fully align with ACF’s Post Type Sync schema
+
+**Automatic Pods Deactivation**
+- Added a one-click button in the success modal to deactivate the original Pods plugin
+- Redirects to ACF → Post Types after migration
+
+**Bug Fixes**
+- Various minor UI and compatibility tweaks
+
 ---
 
 **Enjoy migrating!**

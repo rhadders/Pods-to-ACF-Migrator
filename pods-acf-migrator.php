@@ -56,9 +56,14 @@ add_action("admin_menu", function () {
 });
 
 add_action( 'init', function(){
+    // Only unregister if the original Pods plugin is still active.
+    if ( ! class_exists( 'Pods' ) ) {
+        return;
+    }
+
     $to_disable = (array) get_option( 'pods_acf_migrated_post_types', [] );
-    foreach( $to_disable as $slug ){
-        if ( post_type_exists( $slug ) ){
+    foreach ( $to_disable as $slug ) {
+        if ( post_type_exists( $slug ) ) {
             unregister_post_type( $slug );
         }
     }
@@ -134,30 +139,84 @@ function pods_acf_migrator_dashboard()
     echo '<div class="wrap">';
     echo "<h1>" . esc_html__("Pods to ACF Migrator", "pods-acf-migrator") . "</h1>";
 
-    // Navigation: three links with icon
-    echo '<div class="pods-acf-nav" style="margin:16px 0 18px 0;">
-        <span style="margin-right:18px;">
-            <span class="dashicons dashicons-media-default" style="vertical-align:middle;font-size:17px;margin-right:3px;"></span>
-            <a href="' .
-        admin_url("admin.php?page=pods-acf-migrator-exports") .
-        '">' .
-        __("Exported JSON files", "pods-acf-migrator") .
-        '</a>
-        </span>
-        <span style="margin-right:18px;">
-            <span class="dashicons dashicons-list-view" style="vertical-align:middle;font-size:17px;margin-right:3px;"></span>
-            <a href="' .
-        admin_url("admin.php?page=pods-acf-migrator-log") .
-        '">' .
-        __("Migration Log", "pods-acf-migrator") .
-        '</a>
-        </span>
-        <span>
-            <span class="dashicons dashicons-book-alt" style="vertical-align:middle;font-size:17px;margin-right:3px;"></span>
-            <a href="https://www.advancedcustomfields.com/resources/synchronized-json/" target="_blank" rel="noopener">ACF JSON Sync documentation</a>
-        </span>
-    </div>';
+    // Navigation: up to four links with icon (Deactivate Pods only when JSON exists)
+    echo '<div class="pods-acf-nav" style="margin:16px 0 18px 0;">';
 
+    // 1) Exported JSON files
+    echo '<span style="margin-right:18px;">
+            <span class="dashicons dashicons-media-default" style="vertical-align:middle;font-size:17px;margin-right:3px;"></span>
+            <a href="' . admin_url('admin.php?page=pods-acf-migrator-exports') . '">' . esc_html__('Exported JSON files', 'pods-acf-migrator') . '</a>
+          </span>';
+
+    // 2) Migration Log
+    echo '<span style="margin-right:18px;">
+            <span class="dashicons dashicons-list-view" style="vertical-align:middle;font-size:17px;margin-right:3px;"></span>
+            <a href="' . admin_url('admin.php?page=pods-acf-migrator-log') . '">' . esc_html__('Migration Log', 'pods-acf-migrator') . '</a>
+          </span>';
+
+    // 3) ACF JSON Sync documentation
+    echo '<span style="margin-right:18px;">
+            <span class="dashicons dashicons-book-alt" style="vertical-align:middle;font-size:17px;margin-right:3px;"></span>
+            <a href="https://www.advancedcustomfields.com/resources/synchronized-json/" target="_blank" rel="noopener">' . esc_html__('ACF JSON Sync documentation', 'pods-acf-migrator') . '</a>
+          </span>';
+
+   // 4) Deactivate Pods – only show if JSON files exist
+$json_files = glob( PODS_ACF_JSON_DIR . '*.json' );
+if ( ! empty( $json_files ) ) {
+    $nonce          = wp_create_nonce( 'pods_acf_deactivate_pods' );
+    $active_plugins = (array) get_option( 'active_plugins', [] );
+    $pods_basename  = 'pods/pods.php';
+    foreach ( $active_plugins as $file ) {
+        if ( strpos( $file, 'pods/' ) !== false ) {
+            $pods_basename = $file;
+            break;
+        }
+    }
+
+    echo '<span>
+            <span class="dashicons dashicons-admin-plugins" style="vertical-align:middle;font-size:17px;margin-right:3px;"></span>
+            <a href="#" 
+               id="pods-acf-deactivate-nav-link"
+               data-nonce="' . esc_attr( $nonce ) . '"
+               data-plugin="' . esc_attr( $pods_basename ) . '"
+               style="vertical-align:middle;text-decoration:none;">'
+               . esc_html__( 'Deactivate Pods', 'pods-acf-migrator' ) .
+            '</a>
+          </span>';
+}
+
+    echo '</div>';
+  ?>
+    <script>
+    document.addEventListener('DOMContentLoaded', function(){
+      var link = document.getElementById('pods-acf-deactivate-nav-link');
+      if ( link ) {
+        link.addEventListener('click', function(e){
+          e.preventDefault();
+          var nonce  = this.dataset.nonce,
+              plugin = this.dataset.plugin;
+          fetch( ajaxurl, {
+            method: 'POST',
+            credentials: 'same-origin',
+            body: new URLSearchParams({
+              action: 'pods_acf_deactivate_pods',
+              nonce: nonce,
+              plugin: plugin
+            })
+          })
+          .then( r => r.json() )
+          .then( json => {
+            if ( json.success ) {
+              location.reload();
+            } else {
+              alert( json.data || 'Error deactivating Pods.' );
+            }
+          });
+        });
+      }
+    });
+    </script>
+    <?php
     // Pods check
     if (!class_exists("Pods")) {
         echo '<div class="notice notice-error"><p>' .
@@ -270,11 +329,11 @@ echo '</div>';
         $redirect_to = admin_url("edit.php?post_type=acf-post-type");
 
         echo '<p style="margin-top:20px;">';
-    echo '<a href="' . esc_url( admin_url( 'edit.php?post_type=acf-post-type' ) ) . '" ';
-    echo 'class="button button-primary pods-acf-sync-btn">';
-    esc_html_e( 'Sync ACF', 'pods-acf-migrator' );
-    echo '</a>';
-    echo '</p>';
+        echo '<a href="' . esc_url( admin_url( 'edit.php?post_type=acf-post-type' ) ) . '" ';
+        echo 'class="button button-primary pods-acf-sync-btn" target="_blank" rel="noopener">';
+        esc_html_e( 'Sync ACF', 'pods-acf-migrator' );
+        echo '</a>';
+        echo '</p>';
 
         echo "<script>";
         echo "(function(){";
@@ -650,9 +709,10 @@ function pods_acf_migrator_handle_export()
                     "slug" => $pt_slug,
                     "post_type" => $pt_slug,
                     "title" => $pt_slug,
+                    'menu_icon' => $settings['menu_icon']     ?? '',
                     "label" => $settings["label"] ?? ucfirst($pt_slug),
-                                        "description" => $settings["description"] ?? "",
-                                        // all register_post_type args go INSIDE 'args'
+                    "description" => $settings["description"] ?? "",
+                        // all register_post_type args go INSIDE 'args'
                         'args'      => [
                             'labels'             => [
                                 'name'          => $settings['label']          ?? ucfirst($pt_slug),
@@ -664,9 +724,9 @@ function pods_acf_migrator_handle_export()
                             'hierarchical'       => ! empty($settings['hierarchical']),
                             'has_archive'        => ! empty($settings['has_archive']),
                             'show_ui'            => ! empty( $settings['show_ui'] ),
-                            'show_in_menu'       => isset( $settings['show_in_menu'] )
-                    ? (bool) $settings['show_in_menu']
-                    : true,
+                            'show_in_menu'  => true,
+                            'menu_position' => 31,
+                            'menu_icon'     => 'dashicons-admin-post',
                             'show_in_nav_menus'  => ! empty($settings['show_in_nav_menus']),
                             'show_in_admin_bar'  => isset($settings['show_in_admin_bar'])
                                                       ? (bool) $settings['show_in_admin_bar']
@@ -683,7 +743,6 @@ function pods_acf_migrator_handle_export()
                             'menu_position'      => isset($settings['menu_position'])
                                                       ? intval($settings['menu_position'])
                                                       : null,
-                            'menu_icon'          => $settings['menu_icon']     ?? '',
                             'supports'           => $supports,
                                         ],
                                     ];
@@ -1504,3 +1563,14 @@ document.getElementById('pods-select-all-btn').addEventListener('click', functio
     </script>
     <?php
 } );
+/**
+ * Flush rewrite rules once when we detect new ACF JSON files.
+ */
+add_action( 'admin_init', function() {
+    // Kijk of er JSON-bestanden zijn in acf-json map
+    $files = glob( PODS_ACF_JSON_DIR . '*.json' );
+    if ( ! empty( $files ) && ! get_transient( 'pods_acf_flush_done' ) ) {
+        flush_rewrite_rules();                      // ⚡ flush!
+        set_transient( 'pods_acf_flush_done', 1 );  // gebeurt maar één keer
+    }
+}, 20 );

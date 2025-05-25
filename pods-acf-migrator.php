@@ -15,6 +15,8 @@ if (!defined("ABSPATH")) {
 define("PODS_ACF_JSON_DIR", plugin_dir_path(__FILE__) . "acf-json/");
 define("PODS_ACF_LOG_FILE", plugin_dir_path(__FILE__) . "migration.log");
 
+
+
 // [NEW] Load translation domain
 add_action("plugins_loaded", function () {
     load_plugin_textdomain("pods-acf-migrator", false, dirname(plugin_basename(__FILE__)) . "/languages");
@@ -180,7 +182,7 @@ function pods_acf_migrator_dashboard()
             $acf_version = get_option("acf_pro_version", get_option("acf_version", "0"));
         }
     }
-    $acf_ok = $acf_version && version_compare($acf_version, "6.0.0", ">=");
+    $acf_ok = $acf_version && version_compare($acf_version, "6.1.0", ">=");
     if (!$acf_ok) {
         echo '<div class="notice notice-error"><p><b>' .
             __("ACF Pro 6.0 or higher is required.", "pods-acf-migrator") .
@@ -268,10 +270,11 @@ echo '</div>';
         $redirect_to = admin_url("edit.php?post_type=acf-post-type");
 
         echo '<p style="margin-top:20px;">';
-        echo '<button type="button" id="pods-acf-deactivate-btn" class="button button-secondary">';
-        esc_html_e("Deactivate Pods and sync ACF", "pods-acf-migrator");
-        echo "</button>";
-        echo "</p>";
+    echo '<a href="' . esc_url( admin_url( 'edit.php?post_type=acf-post-type' ) ) . '" ';
+    echo 'class="button button-primary pods-acf-sync-btn">';
+    esc_html_e( 'Sync ACF', 'pods-acf-migrator' );
+    echo '</a>';
+    echo '</p>';
 
         echo "<script>";
         echo "(function(){";
@@ -576,9 +579,7 @@ function pods_acf_migrator_handle_export()
     $sel_fields  = $_POST['pods_fields']    ?? [];
     $sel_export  = $_POST['pods_export']    ?? [];
 
-    // ‪Als pods_export[] niet meer gebruikt wordt, leiden we de selectie af van structure en fields‬
     if ( empty( $sel_export ) ) {
-        // slugs uit structure én uit fields halen
         $sel_export = array_unique(
             array_merge(
                 array_keys( $sel_struct ),
@@ -586,8 +587,6 @@ function pods_acf_migrator_handle_export()
             )
         );
     }
-
-    // ‪Nog steeds niks, dan écht error‬
     if ( empty( $sel_export ) ) {
         $notice = '<div class="notice notice-error"><p>' . __( 'No post types selected for export.', 'pods-acf-migrator' ) . '</p></div>';
         $log_line = date( "Y-m-d H:i" ) . " | ' . $username . ' | fieldgroup | - | No post types selected | Failed\n";
@@ -599,7 +598,6 @@ function pods_acf_migrator_handle_export()
         ];
     }
 
-    // gebruik de afgeleide selectie verder in de functie
     $sel         = $sel_export;
     $exported_fg = 0;
     $exported_cpt = 0;
@@ -653,37 +651,46 @@ function pods_acf_migrator_handle_export()
                     "post_type" => $pt_slug,
                     "title" => $pt_slug,
                     "label" => $settings["label"] ?? ucfirst($pt_slug),
-                    "description" => $settings["description"] ?? "",
-                    "public" => !empty($settings["public"]),
-                    "hierarchical" => !empty($settings["hierarchical"]),
-                    "has_archive" => !empty($settings["has_archive"]),
-                    "show_ui" => !empty($settings["show_ui"]),
-                    "show_in_nav_menus" => !empty($settings["show_in_nav_menus"]),
-                    "show_in_admin_bar" => isset($settings["show_in_admin_bar"])
-                        ? (bool) $settings["show_in_admin_bar"]
-                        : true,
-                    "exclude_from_search" => !empty($settings["exclude_from_search"]),
-                    "publicly_queryable" => !empty($settings["publicly_queryable"]),
-                    "show_in_menu" => !empty($settings["show_ui"]),
-                    "show_in_rest" => !empty($settings["rest_enable"]),
-                    "query_var" => $settings["query_var"] ?? $pt_slug,
-                    "capability_type" => $settings["capability_type"] ?? "post",
-                    "map_meta_cap" => !empty($settings["map_meta_cap"]),
-                    "menu_position" => isset($settings["menu_position"]) ? intval($settings["menu_position"]) : null,
-                    "menu_icon" => $settings["menu_icon"] ?? "",
-                    "supports" => $supports,
-                    "labels" => [
-                        "name" => $settings["label"] ?? ucfirst($pt_slug),
-                        "singular_name" => $settings["singular_label"] ?? ucfirst($pt_slug),
-                        "menu_name" => $settings["menu_name"] ?? ($settings["label"] ?? ucfirst($pt_slug)),
-                        "all_items" =>
-                            $settings["all_items"] ?? sprintf(__("All %s"), $settings["label"] ?? ucfirst($pt_slug)),
-                    ],
-                ];
+                                        "description" => $settings["description"] ?? "",
+                                        // all register_post_type args go INSIDE 'args'
+                        'args'      => [
+                            'labels'             => [
+                                'name'          => $settings['label']          ?? ucfirst($pt_slug),
+                                'singular_name' => $settings['singular_label'] ?? ucfirst($pt_slug),
+                                'menu_name'     => $settings['menu_name']      ?? ($settings['label'] ?? ucfirst($pt_slug)),
+                                'all_items'     => $settings['all_items']      ?? sprintf(__('All %s'), $settings['label'] ?? ucfirst($pt_slug)),
+                            ],
+                            'public'             => ! empty($settings['public']),
+                            'hierarchical'       => ! empty($settings['hierarchical']),
+                            'has_archive'        => ! empty($settings['has_archive']),
+                            'show_ui'            => ! empty( $settings['show_ui'] ),
+                            'show_in_menu'       => isset( $settings['show_in_menu'] )
+                    ? (bool) $settings['show_in_menu']
+                    : true,
+                            'show_in_nav_menus'  => ! empty($settings['show_in_nav_menus']),
+                            'show_in_admin_bar'  => isset($settings['show_in_admin_bar'])
+                                                      ? (bool) $settings['show_in_admin_bar']
+                                                      : true,
+                            'show_in_rest'       => ! empty($settings['rest_enable']),
+                            'exclude_from_search'=> ! empty($settings['exclude_from_search']),
+                            'publicly_queryable' => ! empty($settings['publicly_queryable']),
+                            'query_var'          => $settings['query_var']     ?? $pt_slug,
+                            'rewrite'            => ! empty($settings['rewrite']) && is_array($settings['rewrite'])
+                                                      ? $settings['rewrite']
+                                                      : ['slug' => $pt_slug],
+                            'capability_type'    => $settings['capability_type'] ?? 'post',
+                            'map_meta_cap'       => ! empty($settings['map_meta_cap']),
+                            'menu_position'      => isset($settings['menu_position'])
+                                                      ? intval($settings['menu_position'])
+                                                      : null,
+                            'menu_icon'          => $settings['menu_icon']     ?? '',
+                            'supports'           => $supports,
+                                        ],
+                                    ];
 
-                // Capabilities array
-                if (!empty($settings["capabilities"]) && is_array($settings["capabilities"])) {
-                    $acf_post_type["capabilities"] = $settings["capabilities"];
+                                    // Capabilities array
+                                    if (!empty($settings["capabilities"]) && is_array($settings["capabilities"])) {
+                                        $acf_post_type["capabilities"] = $settings["capabilities"];
                 }
 
                 // Rewrite rules
@@ -834,25 +841,46 @@ function pods_acf_migrator_handle_export()
     }
 
     if (!empty($msg)) {
-        $already = (array) get_option("pods_acf_migrated_post_types", []);
-        $migrated_slugs = array_keys($sel_struct);
-        $merged = array_unique(array_merge($already, $migrated_slugs));
-        update_option("pods_acf_migrated_post_types", $merged);
+        $already        = (array) get_option( 'pods_acf_migrated_post_types', [] );
+            $migrated_slugs = $sel;
+            $merged         = array_unique( array_merge( $already, $migrated_slugs ) );
+update_option( 'pods_acf_migrated_post_types', $merged );
+error_log( 'After update_option: ' . print_r( $merged, true ) );
 
-        $notice =
-            '<div class="notice notice-success"><p>' .
-            __("Migration completed!", "pods-acf-migrator") .
-            " " .
-            implode(" and ", $msg) .
-            " exported.</p></div>";
+            
+    $notice  = '<div class="notice notice-success">';
+    $notice .= '<p>';
+    $notice .= esc_html__( 'Migration completed!', 'pods-acf-migrator' ) . ' ';
+    $notice .= esc_html( implode( ' and ', $msg ) ) . ' exported.';
+    $notice .= '</p>';
 
-        return [
-            "notice" => $notice,
-            "success" => true,
-            "summary" => implode("\n", $summary),
-        ];
+    $nonce     = wp_create_nonce( 'pods_acf_deactivate_pods' );
+    $active    = (array) get_option( 'active_plugins', [] );
+    $pods_file = 'pods/pods.php';
+    foreach ( $active as $p ) {
+        if ( false !== strpos( $p, 'pods/' ) ) {
+            $pods_file = $p;
+            break;
+        }
+    }
+
+    $notice .= '<p>';
+    $notice .= esc_html__( "Would you like to deactivate Pods now?", 'pods-acf-migrator' ) . ' ';
+    $notice .= '<button type="button" class="button button-primary pods-acf-deactivate-btn"';
+    $notice .= ' data-nonce="' . esc_attr( $nonce ) . '"';
+    $notice .= ' data-plugin="' . esc_attr( $pods_file ) . '">';
+    $notice .= esc_html__( 'Deactivate Pods', 'pods-acf-migrator' );
+    $notice .= '</button>';
+    $notice .= '</p>';
+
+    $notice .= '</div>';
+
+    return [
+        'notice'  => $notice,
+        'success' => true,
+        'summary' => implode( "\n", $summary ),
+    ];
     } else {
-        // geen export gedaan
         $notice =
             '<div class="notice notice-warning"><p>' .
             __("No fields or structures were exported. Check your selections.", "pods-acf-migrator") .
@@ -865,7 +893,7 @@ function pods_acf_migrator_handle_export()
         ];
     }
 }
-
+error_log( 'Migrated slugs: ' . print_r( get_option( 'pods_acf_migrated_post_types' ), true ) );
 function pods_acf_migrator_map_field($fname, $fdata)
 {
     $acf_type = "text";
@@ -1349,10 +1377,11 @@ add_action("wp_ajax_pods_acf_deactivate_pods", function () {
  * Inject our accordion-icon script in the admin footer, but only on our plugin page.
  */
 add_action( 'admin_footer', function() {
-    $screen = get_current_screen();
-    if ( $screen->id !== 'toplevel_page_pods-acf-migrator' ) {
-        return;
-    }
+    global $pagenow;
+// We zijn op /wp-admin/admin.php?page=pods-acf-migrator
+if ( $pagenow !== 'admin.php' || ( ! isset( $_GET['page'] ) || $_GET['page'] !== 'pods-acf-migrator' ) ) {
+    return;
+}
     ?>
     <script>
     (function(){
@@ -1426,6 +1455,52 @@ document.getElementById('pods-select-all-btn').addEventListener('click', functio
     }
   });
 });
+        (function(){
+        const btn = document.querySelector('.pods-acf-deactivate-btn');
+        if ( ! btn ) return;
+
+        btn.addEventListener('click', function(){
+            btn.disabled   = true;
+            btn.textContent = '<?php echo esc_js( __( 'Deactivating...', 'pods-acf-migrator' ) ); ?>';
+
+            const data = {
+                action: 'pods_acf_deactivate_pods',
+                nonce:  btn.dataset.nonce,
+                plugin: btn.dataset.plugin
+            };
+
+            // Zet data om in x-www-form-urlencoded string
+            const formBody = Object.entries(data)
+                .map(([k,v]) => encodeURIComponent(k) + '=' + encodeURIComponent(v))
+                .join('&');
+
+            fetch(ajaxurl, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'
+                },
+                body: formBody
+            })
+            .then(response => response.json())
+            .then(json => {
+                if ( json.success ) {
+                    // Bij succes een redirect naar de plugin-lijst
+                    window.location.href = '<?php echo esc_js( admin_url( 'plugins.php' ) ); ?>';
+                } else {
+                    alert( json.data || '<?php echo esc_js( __( 'Error deactivating Pods.', 'pods-acf-migrator' ) ); ?>' );
+                    btn.disabled   = false;
+                    btn.textContent = '<?php echo esc_js( __( 'Deactivate Pods', 'pods-acf-migrator' ) ); ?>';
+                }
+            })
+            .catch(err => {
+                alert('<?php echo esc_js( __( 'AJAX error. Check console for details.', 'pods-acf-migrator' ) ); ?>');
+                console.error(err);
+                btn.disabled   = false;
+                btn.textContent = '<?php echo esc_js( __( 'Deactivate Pods', 'pods-acf-migrator' ) ); ?>';
+            });
+        });
+    })();
     </script>
     <?php
 } );

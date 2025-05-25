@@ -18,7 +18,7 @@ Easily migrate your [Pods](https://pods.io/) Custom Post Types (CPT) and fields 
 
 - WordPress 5.8 or higher
 - [Pods](https://wordpress.org/plugins/pods/) plugin
-- [Advanced Custom Fields PRO (ACF Pro)](https://www.advancedcustomfields.com/pro/) **version 6.0 or higher**
+- [Advanced Custom Fields PRO (ACF Pro)](https://www.advancedcustomfields.com/pro/) **version 6.1 or higher**
 
 ## Installation
 
